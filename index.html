@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Prime Interference Field</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="shell" id="appShell">
+      <section class="control-panel" aria-label="Prime interference controls">
+        <div class="sidebar-body" id="sidebarBody">
+          <div class="identity">
+            <p class="eyebrow">Divisor interference</p>
+            <h1>Prime Interference Field</h1>
+          </div>
+
+          <form class="controls" id="controls">
+            <label class="number-control">
+              <span>N</span>
+              <input id="sizeInput" name="size" type="number" min="2" max="5000" step="1" value="100">
+            </label>
+
+            <label class="zoom-control">
+              <span>Zoom</span>
+              <input id="zoomInput" name="zoom" type="range" min="0.4" max="3" step="0.05" value="1">
+            </label>
+
+            <label class="toggle-control">
+              <input id="primeColumnInput" name="primeColumns" type="checkbox">
+              <span>Highlight prime columns</span>
+            </label>
+
+            <div class="button-row" aria-label="Zoom actions">
+              <button type="button" id="zoomOut" title="Zoom out" aria-label="Zoom out">−</button>
+              <output id="zoomOutput" for="zoomInput">100%</output>
+              <button type="button" id="zoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+              <button type="button" id="resetView">Reset</button>
+            </div>
+          </form>
+
+          <dl class="stats" aria-label="Current grid statistics">
+            <div>
+              <dt>Columns</dt>
+              <dd id="columnCount">100</dd>
+            </div>
+            <div>
+              <dt>Prime signals</dt>
+              <dd id="primeCount">25</dd>
+            </div>
+            <div>
+              <dt>Cell pitch</dt>
+              <dd id="cellPitch">14 px</dd>
+            </div>
+          </dl>
+
+          <div class="legend" aria-label="Legend">
+            <span><i class="swatch swatch-frequency"></i>Frequency hit</span>
+            <span><i class="swatch swatch-prime"></i>Prime by no extra interference</span>
+            <span><i class="swatch swatch-empty"></i>No signal</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="field-panel" aria-label="Prime interference grid">
+        <div class="inspect">
+          <button type="button" class="sidebar-toggle" id="sidebarToggle" aria-expanded="true" aria-controls="sidebarBody" title="Collapse controls">
+            <span aria-hidden="true">&lt;</span>
+          </button>
+          <span id="inspect">Move over the grid to inspect a cell.</span>
+        </div>
+        <div class="canvas-wrap" id="canvasWrap">
+          <canvas id="interferenceCanvas" aria-label="Spreadsheet-style interference grid"></canvas>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="src/app.js"></script>
+  </body>
+</html>
