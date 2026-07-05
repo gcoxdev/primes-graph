@@ -5,11 +5,17 @@ import {
   buildInterferenceModel,
   classifyCell,
   getCanvasPixelRatio,
+  getFrequencyLayers,
+  getHorizontalRayCell,
   getHoverSelection,
   getInterferenceRows,
   getSidebarToggleState,
   isPrimeByInterference,
   normalizeGridSize,
+  shouldDrawDiagonalRayCell,
+  shouldDrawDiagonalRayRoot,
+  shouldDrawHorizontalRayCell,
+  shouldDrawRayRoot,
 } from "../src/app.js";
 
 test("marks frequency hits when the column is divisible by the row", () => {
@@ -32,6 +38,120 @@ test("builds an interference model with divisor counts and prime columns", () =>
       .filter(([, isPrime]) => isPrime)
       .map(([column]) => column),
     [2, 3, 5, 7, 11],
+  );
+});
+
+test("filters frequency ray roots to primes when requested", () => {
+  const model = buildInterferenceModel(12);
+
+  assert.equal(shouldDrawRayRoot(1, model, true), true);
+  assert.equal(shouldDrawRayRoot(2, model, true), true);
+  assert.equal(shouldDrawRayRoot(3, model, true), true);
+  assert.equal(shouldDrawRayRoot(4, model, true), false);
+  assert.equal(shouldDrawRayRoot(9, model, true), false);
+  assert.equal(shouldDrawRayRoot(9, model, false), true);
+});
+
+test("filters diagonal ray roots to one and primes", () => {
+  const model = buildInterferenceModel(12);
+
+  assert.equal(shouldDrawDiagonalRayRoot(1, model), true);
+  assert.equal(shouldDrawDiagonalRayRoot(2, model), true);
+  assert.equal(shouldDrawDiagonalRayRoot(3, model), true);
+  assert.equal(shouldDrawDiagonalRayRoot(4, model), false);
+  assert.equal(shouldDrawDiagonalRayRoot(9, model), false);
+});
+
+test("applies row and diagonal prime-root filters together", () => {
+  const model = buildInterferenceModel(30);
+
+  assert.equal(
+    shouldDrawDiagonalRayCell(5, 4, model, {
+      primeRootsOnly: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldDrawDiagonalRayCell(5, 7, model, {
+      primeRootsOnly: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldDrawDiagonalRayCell(4, 7, model, {
+      primeRootsOnly: true,
+    }),
+    false,
+  );
+});
+
+test("keeps the row-one horizontal ray in diagonal ray mode", () => {
+  assert.deepEqual(getHorizontalRayCell(4), { row: 1, column: 4 });
+});
+
+test("filters row-one horizontal ray to primes when both prime-root modes are enabled", () => {
+  const model = buildInterferenceModel(12);
+
+  assert.equal(
+    shouldDrawHorizontalRayCell(1, model, {
+      primeRootsOnly: true,
+      diagonalPrimeRays: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldDrawHorizontalRayCell(7, model, {
+      primeRootsOnly: true,
+      diagonalPrimeRays: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldDrawHorizontalRayCell(8, model, {
+      primeRootsOnly: true,
+      diagonalPrimeRays: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldDrawHorizontalRayCell(8, model, {
+      primeRootsOnly: false,
+      diagonalPrimeRays: true,
+    }),
+    true,
+  );
+});
+
+test("combines prime-root rows and diagonal ray layers", () => {
+  assert.deepEqual(
+    getFrequencyLayers({
+      primeRootsOnly: false,
+      diagonalPrimeRays: false,
+    }),
+    {
+      diagonalPrimeRays: false,
+      rowFrequencyHits: true,
+    },
+  );
+  assert.deepEqual(
+    getFrequencyLayers({
+      primeRootsOnly: false,
+      diagonalPrimeRays: true,
+    }),
+    {
+      diagonalPrimeRays: true,
+      rowFrequencyHits: false,
+    },
+  );
+  assert.deepEqual(
+    getFrequencyLayers({
+      primeRootsOnly: true,
+      diagonalPrimeRays: true,
+    }),
+    {
+      diagonalPrimeRays: true,
+      rowFrequencyHits: false,
+    },
   );
 });
 

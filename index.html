@@ -26,17 +26,27 @@
               <input id="zoomInput" name="zoom" type="range" min="0.4" max="3" step="0.05" value="1">
             </label>
 
-            <label class="toggle-control">
-              <input id="primeColumnInput" name="primeColumns" type="checkbox">
-              <span>Highlight prime columns</span>
-            </label>
-
             <div class="button-row" aria-label="Zoom actions">
               <button type="button" id="zoomOut" title="Zoom out" aria-label="Zoom out">−</button>
               <output id="zoomOutput" for="zoomInput">100%</output>
               <button type="button" id="zoomIn" title="Zoom in" aria-label="Zoom in">+</button>
               <button type="button" id="resetView">Reset</button>
             </div>
+
+            <label class="toggle-control">
+              <input id="primeColumnInput" name="primeColumns" type="checkbox">
+              <span>Highlight prime columns</span>
+            </label>
+
+            <label class="toggle-control">
+              <input id="primeRayInput" name="primeRays" type="checkbox">
+              <span>Prime-root rows only</span>
+            </label>
+
+            <label class="toggle-control">
+              <input id="diagonalPrimeRayInput" name="diagonalPrimeRays" type="checkbox">
+              <span>Prime-root diagonal rays</span>
+            </label>
           </form>
 
           <dl class="stats" aria-label="Current grid statistics">

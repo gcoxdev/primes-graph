@@ -115,6 +115,40 @@ export function getHoverSelection(row, column, size) {
   return { active: true, row, column };
 }
 
+export function shouldDrawRayRoot(row, model, primeRootsOnly) {
+  if (!primeRootsOnly) return true;
+  if (row === 1) return true;
+  return Boolean(model.primeColumns[row]);
+}
+
+export function shouldDrawDiagonalRayRoot(root, model) {
+  if (root === 1) return true;
+  return Boolean(model.primeColumns[root]);
+}
+
+export function shouldDrawDiagonalRayCell(root, row, model, options = {}) {
+  return shouldDrawDiagonalRayRoot(root, model) && shouldDrawRayRoot(row, model, options.primeRootsOnly);
+}
+
+export function getHorizontalRayCell(column) {
+  return { row: 1, column };
+}
+
+export function shouldDrawHorizontalRayCell(column, model, options = {}) {
+  if (!options.primeRootsOnly || !options.diagonalPrimeRays) return true;
+  if (column === 1) return true;
+  return Boolean(model.primeColumns[column]);
+}
+
+export function getFrequencyLayers(options = {}) {
+  const diagonalPrimeRays = Boolean(options.diagonalPrimeRays);
+
+  return {
+    diagonalPrimeRays,
+    rowFrequencyHits: !diagonalPrimeRays,
+  };
+}
+
 function countPrimeSignals(size) {
   return buildInterferenceModel(size).primeCount;
 }
@@ -130,6 +164,8 @@ function createState() {
     dpr: 1,
     hover: getHoverSelection(0, 0, DEFAULT_N),
     highlightPrimeColumns: false,
+    primeRootsOnly: false,
+    diagonalPrimeRays: false,
     model,
     primeCount: model.primeCount,
   };
@@ -216,6 +252,47 @@ function drawCellMark(ctx, x, y, cellSize, glowColor, markColor) {
   ctx.fillRect(x + inset, y + inset, cellSize - inset * 2, cellSize - inset * 2);
 }
 
+function drawRowFrequencyHits(ctx, state, model) {
+  const { size, cellSize, headerSize } = state;
+
+  for (let row = 1; row <= size; row += 1) {
+    if (!shouldDrawRayRoot(row, model, state.primeRootsOnly)) continue;
+
+    for (let column = row; column <= size; column += row) {
+      const x = headerSize + (column - 1) * cellSize;
+      const y = headerSize + (row - 1) * cellSize;
+      drawCellMark(ctx, x, y, cellSize, palette.frequencyGlow, palette.frequency);
+    }
+  }
+}
+
+function drawDiagonalPrimeRays(ctx, state, model) {
+  const { size, cellSize, headerSize } = state;
+
+  for (let column = 1; column <= size; column += 1) {
+    if (!shouldDrawHorizontalRayCell(column, model, state)) continue;
+
+    const cell = getHorizontalRayCell(column);
+    const x = headerSize + (cell.column - 1) * cellSize;
+    const y = headerSize + (cell.row - 1) * cellSize;
+    drawCellMark(ctx, x, y, cellSize, palette.frequencyGlow, palette.frequency);
+  }
+
+  for (let root = 1; root <= size; root += 1) {
+    if (!shouldDrawDiagonalRayRoot(root, model)) continue;
+
+    for (let step = 1; step * root <= size && step <= size; step += 1) {
+      const column = step * root;
+      const row = step;
+      if (!shouldDrawDiagonalRayCell(root, row, model, state)) continue;
+
+      const x = headerSize + (column - 1) * cellSize;
+      const y = headerSize + (row - 1) * cellSize;
+      drawCellMark(ctx, x, y, cellSize, palette.frequencyGlow, palette.frequency);
+    }
+  }
+}
+
 function drawGrid(ctx, state) {
   const { size, cellSize, headerSize } = state;
   const totalSize = headerSize + size * cellSize;
@@ -230,12 +307,13 @@ function drawGrid(ctx, state) {
   ctx.fillStyle = palette.empty;
   ctx.fillRect(headerSize, headerSize, gridSize, gridSize);
 
-  for (let row = 1; row <= size; row += 1) {
-    for (let column = row; column <= size; column += row) {
-      const x = headerSize + (column - 1) * cellSize;
-      const y = headerSize + (row - 1) * cellSize;
-      drawCellMark(ctx, x, y, cellSize, palette.frequencyGlow, palette.frequency);
-    }
+  const layers = getFrequencyLayers(state);
+  if (layers.rowFrequencyHits) {
+    drawRowFrequencyHits(ctx, state, model);
+  }
+
+  if (layers.diagonalPrimeRays) {
+    drawDiagonalPrimeRays(ctx, state, model);
   }
 
   for (let column = 2; column <= size; column += 1) {
@@ -324,6 +402,8 @@ function init() {
   const controls = document.querySelector("#controls");
   const sizeInput = document.querySelector("#sizeInput");
   const primeColumnInput = document.querySelector("#primeColumnInput");
+  const primeRayInput = document.querySelector("#primeRayInput");
+  const diagonalPrimeRayInput = document.querySelector("#diagonalPrimeRayInput");
   const zoomInput = document.querySelector("#zoomInput");
   const zoomOut = document.querySelector("#zoomOut");
   const zoomIn = document.querySelector("#zoomIn");
@@ -377,6 +457,16 @@ function init() {
 
   primeColumnInput.addEventListener("change", () => {
     state.highlightPrimeColumns = primeColumnInput.checked;
+    redraw();
+  });
+
+  primeRayInput.addEventListener("change", () => {
+    state.primeRootsOnly = primeRayInput.checked;
+    redraw();
+  });
+
+  diagonalPrimeRayInput.addEventListener("change", () => {
+    state.diagonalPrimeRays = diagonalPrimeRayInput.checked;
     redraw();
   });
 
