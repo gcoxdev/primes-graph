@@ -38,7 +38,8 @@ input {
   display: grid;
   grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr);
   gap: 1rem;
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
   padding: 1rem;
   transition: grid-template-columns 180ms ease;
 }
@@ -248,6 +249,8 @@ output {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .inspect {
@@ -267,6 +270,9 @@ output {
 }
 
 .canvas-wrap {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
   overflow: auto;
   background:
     linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
@@ -275,7 +281,16 @@ output {
   background-size: 18px 18px;
 }
 
+.canvas-stage {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+}
+
 canvas {
+  position: sticky;
+  top: 0;
+  left: 0;
   display: block;
   cursor: crosshair;
 }

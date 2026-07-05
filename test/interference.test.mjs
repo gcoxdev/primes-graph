@@ -4,12 +4,14 @@ import assert from "node:assert/strict";
 import {
   buildInterferenceModel,
   classifyCell,
+  getCanvasLayout,
   getCanvasPixelRatio,
   getFrequencyLayers,
   getHorizontalRayCell,
   getHoverSelection,
   getInterferenceRows,
   getSidebarToggleState,
+  getVisibleGridBounds,
   isPrimeByInterference,
   normalizeGridSize,
   shouldDrawDiagonalRayCell,
@@ -222,4 +224,63 @@ test("normalizes grid size input for form-driven updates", () => {
 test("caps canvas pixel ratio for very large logical canvases", () => {
   assert.equal(getCanvasPixelRatio(1000, 2), 2);
   assert.equal(getCanvasPixelRatio(20000, 2), 0.4096);
+});
+
+test("snaps canvas layout dimensions to whole display pixels", () => {
+  assert.deepEqual(getCanvasLayout(100, 16.1, 58, 2, 900, 700), {
+    cellSize: 16,
+    logicalSize: 1658,
+    displayWidth: 900,
+    displayHeight: 700,
+    backingWidth: 1800,
+    backingHeight: 1400,
+    dpr: 2,
+  });
+  assert.deepEqual(getCanvasLayout(100, 16.6, 58, 2, 900, 700), {
+    cellSize: 17,
+    logicalSize: 1758,
+    displayWidth: 900,
+    displayHeight: 700,
+    backingWidth: 1800,
+    backingHeight: 1400,
+    dpr: 2,
+  });
+});
+
+test("keeps large grids sharp by sizing the bitmap to the viewport", () => {
+  assert.deepEqual(getCanvasLayout(5000, 14, 58, 2, 1200, 800), {
+    cellSize: 14,
+    logicalSize: 70058,
+    displayWidth: 1200,
+    displayHeight: 800,
+    backingWidth: 2400,
+    backingHeight: 1600,
+    dpr: 2,
+  });
+});
+
+test("limits large-grid rendering to visible rows and columns", () => {
+  assert.deepEqual(getVisibleGridBounds(5000, 14, 58, 0, 0, 1200, 800), {
+    left: 0,
+    top: 0,
+    right: 1200,
+    bottom: 800,
+    totalSize: 70058,
+    firstRow: 1,
+    lastRow: 53,
+    firstColumn: 1,
+    lastColumn: 82,
+  });
+
+  assert.deepEqual(getVisibleGridBounds(5000, 14, 58, 69000, 69000, 1200, 800), {
+    left: 69000,
+    top: 69000,
+    right: 70058,
+    bottom: 69800,
+    totalSize: 70058,
+    firstRow: 4925,
+    lastRow: 4982,
+    firstColumn: 4925,
+    lastColumn: 5000,
+  });
 });

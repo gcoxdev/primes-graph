@@ -42,6 +42,66 @@ export function getCanvasPixelRatio(logicalSize, devicePixelRatio = 1) {
   return Math.max(0.05, Math.min(cappedDeviceRatio, sizeRatio));
 }
 
+export function getCanvasLayout(
+  size,
+  cellSize,
+  headerSize,
+  devicePixelRatio = 1,
+  viewportWidth,
+  viewportHeight,
+) {
+  const snappedCellSize = Math.max(1, Math.round(cellSize));
+  const logicalSize = headerSize + size * snappedCellSize;
+  const displayWidth = Math.max(1, Math.min(logicalSize, Math.floor(viewportWidth || logicalSize)));
+  const displayHeight = Math.max(1, Math.min(logicalSize, Math.floor(viewportHeight || logicalSize)));
+  const dpr =
+    viewportWidth && viewportHeight
+      ? Math.min(devicePixelRatio || 1, 2)
+      : getCanvasPixelRatio(logicalSize, devicePixelRatio);
+
+  return {
+    cellSize: snappedCellSize,
+    logicalSize,
+    displayWidth,
+    displayHeight,
+    backingWidth: Math.ceil(displayWidth * dpr),
+    backingHeight: Math.ceil(displayHeight * dpr),
+    dpr,
+  };
+}
+
+export function getVisibleGridBounds(
+  size,
+  cellSize,
+  headerSize,
+  scrollLeft,
+  scrollTop,
+  viewportWidth,
+  viewportHeight,
+) {
+  const totalSize = headerSize + size * cellSize;
+  const left = Math.max(0, Math.min(totalSize, scrollLeft));
+  const top = Math.max(0, Math.min(totalSize, scrollTop));
+  const right = Math.max(left, Math.min(totalSize, left + viewportWidth));
+  const bottom = Math.max(top, Math.min(totalSize, top + viewportHeight));
+  const firstColumn = Math.max(1, Math.min(size, Math.floor((left - headerSize) / cellSize) + 1));
+  const lastColumn = Math.max(1, Math.min(size, Math.ceil((right - headerSize) / cellSize)));
+  const firstRow = Math.max(1, Math.min(size, Math.floor((top - headerSize) / cellSize) + 1));
+  const lastRow = Math.max(1, Math.min(size, Math.ceil((bottom - headerSize) / cellSize)));
+
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    totalSize,
+    firstRow,
+    lastRow,
+    firstColumn,
+    lastColumn,
+  };
+}
+
 export function getInterferenceRows(column) {
   const rows = [];
   for (let row = 1; row <= column; row += 1) {
@@ -162,6 +222,10 @@ function createState() {
     cellSize: BASE_CELL_SIZE,
     headerSize: HEADER_SIZE,
     dpr: 1,
+    scrollLeft: 0,
+    scrollTop: 0,
+    viewportWidth: 1,
+    viewportHeight: 1,
     hover: getHoverSelection(0, 0, DEFAULT_N),
     highlightPrimeColumns: false,
     primeRootsOnly: false,
@@ -171,42 +235,74 @@ function createState() {
   };
 }
 
-function resizeCanvas(canvas, state) {
-  const logicalSize = state.headerSize + state.size * state.cellSize;
-  state.dpr = getCanvasPixelRatio(logicalSize, window.devicePixelRatio);
-  canvas.width = Math.ceil(logicalSize * state.dpr);
-  canvas.height = Math.ceil(logicalSize * state.dpr);
-  canvas.style.width = `${logicalSize}px`;
-  canvas.style.height = `${logicalSize}px`;
+function resizeCanvas(canvas, stage, wrap, state) {
+  const layout = getCanvasLayout(
+    state.size,
+    state.cellSize,
+    state.headerSize,
+    window.devicePixelRatio,
+    wrap.clientWidth,
+    wrap.clientHeight,
+  );
+  state.cellSize = layout.cellSize;
+  state.dpr = layout.dpr;
+  state.viewportWidth = layout.displayWidth;
+  state.viewportHeight = layout.displayHeight;
+
+  stage.style.width = `${layout.logicalSize}px`;
+  stage.style.height = `${layout.logicalSize}px`;
+  state.scrollLeft = wrap.scrollLeft;
+  state.scrollTop = wrap.scrollTop;
+
+  if (canvas.width !== layout.backingWidth) canvas.width = layout.backingWidth;
+  if (canvas.height !== layout.backingHeight) canvas.height = layout.backingHeight;
+  canvas.style.width = `${layout.displayWidth}px`;
+  canvas.style.height = `${layout.displayHeight}px`;
 }
 
-function drawHeaders(ctx, state) {
+function drawHeaders(ctx, state, bounds) {
   const { size, cellSize, headerSize } = state;
   const totalSize = headerSize + size * cellSize;
+  const headerRight = Math.min(totalSize, bounds.right);
+  const headerBottom = Math.min(totalSize, bounds.bottom);
 
   ctx.fillStyle = palette.header;
-  ctx.fillRect(0, 0, totalSize, headerSize);
-  ctx.fillRect(0, 0, headerSize, totalSize);
+  if (bounds.top < headerSize) {
+    ctx.fillRect(bounds.left, 0, headerRight - bounds.left, headerSize);
+  }
+  if (bounds.left < headerSize) {
+    ctx.fillRect(0, bounds.top, headerSize, headerBottom - bounds.top);
+  }
 
   ctx.fillStyle = palette.headerAlt;
-  ctx.fillRect(0, 0, headerSize, headerSize);
+  if (bounds.left < headerSize && bounds.top < headerSize) {
+    ctx.fillRect(0, 0, headerSize, headerSize);
+  }
 
   if (state.hover.active) {
     const hoverX = headerSize + (state.hover.column - 1) * cellSize;
     const hoverY = headerSize + (state.hover.row - 1) * cellSize;
 
     ctx.fillStyle = palette.hoverBand;
-    ctx.fillRect(hoverX, 0, cellSize, headerSize);
-    ctx.fillRect(0, hoverY, headerSize, cellSize);
+    if (bounds.top < headerSize && hoverX + cellSize >= bounds.left && hoverX <= bounds.right) {
+      ctx.fillRect(hoverX, 0, cellSize, headerSize);
+    }
+    if (bounds.left < headerSize && hoverY + cellSize >= bounds.top && hoverY <= bounds.bottom) {
+      ctx.fillRect(0, hoverY, headerSize, cellSize);
+    }
   }
 
   ctx.strokeStyle = palette.majorGrid;
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(headerSize, 0);
-  ctx.lineTo(headerSize, totalSize);
-  ctx.moveTo(0, headerSize);
-  ctx.lineTo(totalSize, headerSize);
+  if (headerSize >= bounds.left && headerSize <= bounds.right) {
+    ctx.moveTo(headerSize, bounds.top);
+    ctx.lineTo(headerSize, bounds.bottom);
+  }
+  if (headerSize >= bounds.top && headerSize <= bounds.bottom) {
+    ctx.moveTo(bounds.left, headerSize);
+    ctx.lineTo(bounds.right, headerSize);
+  }
   ctx.stroke();
 
   const showEvery = cellSize >= 22 ? 1 : cellSize >= 12 ? 5 : 10;
@@ -215,15 +311,21 @@ function drawHeaders(ctx, state) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  for (let index = 1; index <= size; index += 1) {
+  const firstVisibleIndex = Math.min(bounds.firstRow, bounds.firstColumn);
+  const lastVisibleIndex = Math.max(bounds.lastRow, bounds.lastColumn);
+  for (let index = firstVisibleIndex; index <= lastVisibleIndex; index += 1) {
     if (index !== 1 && index % showEvery !== 0 && index !== size) continue;
     const offset = headerSize + (index - 0.5) * cellSize;
-    ctx.fillText(String(index), offset, headerSize / 2);
-    ctx.fillText(String(index), headerSize / 2, offset);
+    if (bounds.top < headerSize && offset >= bounds.left && offset <= bounds.right) {
+      ctx.fillText(String(index), offset, headerSize / 2);
+    }
+    if (bounds.left < headerSize && offset >= bounds.top && offset <= bounds.bottom) {
+      ctx.fillText(String(index), headerSize / 2, offset);
+    }
   }
 }
 
-function drawHoverGuides(ctx, state) {
+function drawHoverGuides(ctx, state, bounds) {
   if (!state.hover.active) return;
 
   const { size, cellSize, headerSize } = state;
@@ -232,15 +334,27 @@ function drawHoverGuides(ctx, state) {
   const y = headerSize + (state.hover.row - 1) * cellSize;
 
   ctx.fillStyle = palette.hoverBand;
-  ctx.fillRect(headerSize, y, gridSize, cellSize);
-  ctx.fillRect(x, headerSize, cellSize, gridSize);
+  if (y + cellSize >= bounds.top && y <= bounds.bottom) {
+    const bandLeft = Math.max(headerSize, bounds.left);
+    const bandRight = Math.min(gridSize + headerSize, bounds.right);
+    ctx.fillRect(bandLeft, y, bandRight - bandLeft, cellSize);
+  }
+  if (x + cellSize >= bounds.left && x <= bounds.right) {
+    const bandTop = Math.max(headerSize, bounds.top);
+    const bandBottom = Math.min(gridSize + headerSize, bounds.bottom);
+    ctx.fillRect(x, bandTop, cellSize, bandBottom - bandTop);
+  }
 
   ctx.fillStyle = palette.hoverIntersection;
-  ctx.fillRect(x, y, cellSize, cellSize);
+  if (x + cellSize >= bounds.left && x <= bounds.right && y + cellSize >= bounds.top && y <= bounds.bottom) {
+    ctx.fillRect(x, y, cellSize, cellSize);
+  }
 
   ctx.strokeStyle = palette.hoverLine;
   ctx.lineWidth = 2;
-  ctx.strokeRect(x + 1, y + 1, Math.max(1, cellSize - 2), Math.max(1, cellSize - 2));
+  if (x + cellSize >= bounds.left && x <= bounds.right && y + cellSize >= bounds.top && y <= bounds.bottom) {
+    ctx.strokeRect(x + 1, y + 1, Math.max(1, cellSize - 2), Math.max(1, cellSize - 2));
+  }
 }
 
 function drawCellMark(ctx, x, y, cellSize, glowColor, markColor) {
@@ -252,13 +366,14 @@ function drawCellMark(ctx, x, y, cellSize, glowColor, markColor) {
   ctx.fillRect(x + inset, y + inset, cellSize - inset * 2, cellSize - inset * 2);
 }
 
-function drawRowFrequencyHits(ctx, state, model) {
+function drawRowFrequencyHits(ctx, state, model, bounds) {
   const { size, cellSize, headerSize } = state;
 
-  for (let row = 1; row <= size; row += 1) {
+  for (let row = bounds.firstRow; row <= bounds.lastRow; row += 1) {
     if (!shouldDrawRayRoot(row, model, state.primeRootsOnly)) continue;
 
-    for (let column = row; column <= size; column += row) {
+    const firstMultiple = Math.max(row, Math.ceil(bounds.firstColumn / row) * row);
+    for (let column = firstMultiple; column <= Math.min(size, bounds.lastColumn); column += row) {
       const x = headerSize + (column - 1) * cellSize;
       const y = headerSize + (row - 1) * cellSize;
       drawCellMark(ctx, x, y, cellSize, palette.frequencyGlow, palette.frequency);
@@ -266,22 +381,26 @@ function drawRowFrequencyHits(ctx, state, model) {
   }
 }
 
-function drawDiagonalPrimeRays(ctx, state, model) {
+function drawDiagonalPrimeRays(ctx, state, model, bounds) {
   const { size, cellSize, headerSize } = state;
 
-  for (let column = 1; column <= size; column += 1) {
-    if (!shouldDrawHorizontalRayCell(column, model, state)) continue;
+  if (bounds.firstRow <= 1 && bounds.lastRow >= 1) {
+    for (let column = bounds.firstColumn; column <= bounds.lastColumn; column += 1) {
+      if (!shouldDrawHorizontalRayCell(column, model, state)) continue;
 
-    const cell = getHorizontalRayCell(column);
-    const x = headerSize + (cell.column - 1) * cellSize;
-    const y = headerSize + (cell.row - 1) * cellSize;
-    drawCellMark(ctx, x, y, cellSize, palette.frequencyGlow, palette.frequency);
+      const cell = getHorizontalRayCell(column);
+      const x = headerSize + (cell.column - 1) * cellSize;
+      const y = headerSize + (cell.row - 1) * cellSize;
+      drawCellMark(ctx, x, y, cellSize, palette.frequencyGlow, palette.frequency);
+    }
   }
 
   for (let root = 1; root <= size; root += 1) {
     if (!shouldDrawDiagonalRayRoot(root, model)) continue;
 
-    for (let step = 1; step * root <= size && step <= size; step += 1) {
+    const firstStep = Math.max(bounds.firstRow, Math.ceil(bounds.firstColumn / root));
+    const lastStep = Math.min(bounds.lastRow, Math.floor(bounds.lastColumn / root), size);
+    for (let step = firstStep; step <= lastStep; step += 1) {
       const column = step * root;
       const row = step;
       if (!shouldDrawDiagonalRayCell(root, row, model, state)) continue;
@@ -297,71 +416,105 @@ function drawGrid(ctx, state) {
   const { size, cellSize, headerSize } = state;
   const totalSize = headerSize + size * cellSize;
   const gridSize = size * cellSize;
+  const bounds = getVisibleGridBounds(
+    size,
+    cellSize,
+    headerSize,
+    state.scrollLeft,
+    state.scrollTop,
+    state.viewportWidth,
+    state.viewportHeight,
+  );
   const model = state.model && state.model.size === size ? state.model : buildInterferenceModel(size);
   state.model = model;
   state.primeCount = model.primeCount;
 
   ctx.fillStyle = palette.page;
-  ctx.fillRect(0, 0, totalSize, totalSize);
+  ctx.fillRect(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
 
   ctx.fillStyle = palette.empty;
-  ctx.fillRect(headerSize, headerSize, gridSize, gridSize);
+  const visibleGridLeft = Math.max(headerSize, bounds.left);
+  const visibleGridTop = Math.max(headerSize, bounds.top);
+  const visibleGridRight = Math.min(totalSize, bounds.right);
+  const visibleGridBottom = Math.min(totalSize, bounds.bottom);
+  if (visibleGridRight > visibleGridLeft && visibleGridBottom > visibleGridTop) {
+    ctx.fillRect(
+      visibleGridLeft,
+      visibleGridTop,
+      visibleGridRight - visibleGridLeft,
+      visibleGridBottom - visibleGridTop,
+    );
+  }
 
   const layers = getFrequencyLayers(state);
   if (layers.rowFrequencyHits) {
-    drawRowFrequencyHits(ctx, state, model);
+    drawRowFrequencyHits(ctx, state, model, bounds);
   }
 
   if (layers.diagonalPrimeRays) {
-    drawDiagonalPrimeRays(ctx, state, model);
+    drawDiagonalPrimeRays(ctx, state, model, bounds);
   }
 
-  for (let column = 2; column <= size; column += 1) {
+  for (let column = Math.max(2, bounds.firstColumn); column <= bounds.lastColumn; column += 1) {
     if (!model.primeColumns[column]) continue;
 
     const x = headerSize + (column - 1) * cellSize;
     if (state.highlightPrimeColumns) {
-      for (let row = 1; row <= column; row += 1) {
+      for (let row = bounds.firstRow; row <= Math.min(column, bounds.lastRow); row += 1) {
         const y = headerSize + (row - 1) * cellSize;
         drawCellMark(ctx, x, y, cellSize, palette.primeGlow, palette.prime);
       }
     } else {
-      drawCellMark(ctx, x, headerSize, cellSize, palette.primeGlow, palette.prime);
-      drawCellMark(
-        ctx,
-        x,
-        headerSize + (column - 1) * cellSize,
-        cellSize,
-        palette.primeGlow,
-        palette.prime,
-      );
+      if (bounds.firstRow <= 1 && bounds.lastRow >= 1) {
+        drawCellMark(ctx, x, headerSize, cellSize, palette.primeGlow, palette.prime);
+      }
+      if (column >= bounds.firstRow && column <= bounds.lastRow) {
+        drawCellMark(
+          ctx,
+          x,
+          headerSize + (column - 1) * cellSize,
+          cellSize,
+          palette.primeGlow,
+          palette.prime,
+        );
+      }
     }
   }
 
-  drawHoverGuides(ctx, state);
+  drawHoverGuides(ctx, state, bounds);
 
   ctx.strokeStyle = palette.grid;
   ctx.lineWidth = 1;
   ctx.beginPath();
 
-  for (let index = 0; index <= size; index += 1) {
+  const firstVerticalLine = Math.max(0, Math.floor((bounds.left - headerSize) / cellSize));
+  const lastVerticalLine = Math.min(size, Math.ceil((bounds.right - headerSize) / cellSize));
+  for (let index = firstVerticalLine; index <= lastVerticalLine; index += 1) {
     const offset = headerSize + index * cellSize;
-    ctx.moveTo(headerSize, offset);
-    ctx.lineTo(totalSize, offset);
-    ctx.moveTo(offset, headerSize);
-    ctx.lineTo(offset, totalSize);
+    ctx.moveTo(offset, visibleGridTop);
+    ctx.lineTo(offset, visibleGridBottom);
+  }
+
+  const firstHorizontalLine = Math.max(0, Math.floor((bounds.top - headerSize) / cellSize));
+  const lastHorizontalLine = Math.min(size, Math.ceil((bounds.bottom - headerSize) / cellSize));
+  for (let index = firstHorizontalLine; index <= lastHorizontalLine; index += 1) {
+    const offset = headerSize + index * cellSize;
+    ctx.moveTo(visibleGridLeft, offset);
+    ctx.lineTo(visibleGridRight, offset);
   }
 
   ctx.stroke();
-  drawHeaders(ctx, state);
+  drawHeaders(ctx, state, bounds);
 }
 
-function render(canvas, state) {
+function render(canvas, stage, wrap, state) {
   state.cellSize = BASE_CELL_SIZE * state.zoom;
-  resizeCanvas(canvas, state);
+  resizeCanvas(canvas, stage, wrap, state);
 
   const ctx = canvas.getContext("2d");
   ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+  ctx.clearRect(0, 0, state.viewportWidth, state.viewportHeight);
+  ctx.translate(-state.scrollLeft, -state.scrollTop);
   drawGrid(ctx, state);
 }
 
@@ -380,10 +533,10 @@ function describeCell(row, column, options = {}) {
   return `row ${row}, column ${column}: no signal from this row.`;
 }
 
-function getCellFromPointer(event, canvas, state) {
+function getCellFromPointer(event, canvas, wrap, state) {
   const rect = canvas.getBoundingClientRect();
-  const x = event.clientX - rect.left - state.headerSize;
-  const y = event.clientY - rect.top - state.headerSize;
+  const x = event.clientX - rect.left + wrap.scrollLeft - state.headerSize;
+  const y = event.clientY - rect.top + wrap.scrollTop - state.headerSize;
   const column = Math.floor(x / state.cellSize) + 1;
   const row = Math.floor(y / state.cellSize) + 1;
 
@@ -399,6 +552,7 @@ function init() {
   const sidebarToggle = document.querySelector("#sidebarToggle");
   const canvas = document.querySelector("#interferenceCanvas");
   const wrap = document.querySelector("#canvasWrap");
+  const stage = document.querySelector("#canvasStage");
   const controls = document.querySelector("#controls");
   const sizeInput = document.querySelector("#sizeInput");
   const primeColumnInput = document.querySelector("#primeColumnInput");
@@ -433,8 +587,19 @@ function init() {
   };
 
   const redraw = () => {
-    render(canvas, state);
+    render(canvas, stage, wrap, state);
     updateStats();
+  };
+
+  let scrollFrame = 0;
+  const redrawFromScroll = () => {
+    scrollFrame = 0;
+    render(canvas, stage, wrap, state);
+  };
+
+  const scheduleScrollRedraw = () => {
+    if (scrollFrame) return;
+    scrollFrame = requestAnimationFrame(redrawFromScroll);
   };
 
   const updateSizeFromInput = () => {
@@ -502,7 +667,7 @@ function init() {
   });
 
   canvas.addEventListener("pointermove", (event) => {
-    const { row, column } = getCellFromPointer(event, canvas, state);
+    const { row, column } = getCellFromPointer(event, canvas, wrap, state);
     inspect.textContent = describeCell(row, column, {
       highlightPrimeColumns: state.highlightPrimeColumns,
     });
@@ -518,6 +683,10 @@ function init() {
     state.hover = getHoverSelection(0, 0, state.size);
     inspect.textContent = "Move over the grid to inspect a cell.";
     redraw();
+  });
+
+  wrap.addEventListener("scroll", () => {
+    scheduleScrollRedraw();
   });
 
   applySidebarState();
