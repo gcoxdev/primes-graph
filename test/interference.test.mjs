@@ -8,6 +8,7 @@ import {
   getCanvasPixelRatio,
   getFrequencyLayers,
   getHorizontalRayCell,
+  getHoverDiagonalColumn,
   getHoverSelection,
   getInterferenceRows,
   getSidebarToggleState,
@@ -210,6 +211,17 @@ test("returns hover selection only for cells inside the grid", () => {
     row: 0,
     column: 0,
   });
+});
+
+test("maps hover diagonals by grid direction", () => {
+  assert.equal(getHoverDiagonalColumn(4, 4, 7, "falling"), 7);
+  assert.equal(getHoverDiagonalColumn(5, 4, 7, "falling"), 8);
+  assert.equal(getHoverDiagonalColumn(3, 4, 7, "falling"), 6);
+
+  assert.equal(getHoverDiagonalColumn(4, 4, 7, "rising"), 7);
+  assert.equal(getHoverDiagonalColumn(5, 4, 7, "rising"), 6);
+  assert.equal(getHoverDiagonalColumn(3, 4, 7, "rising"), 8);
+  assert.equal(getHoverDiagonalColumn(4, 4, 7, "unknown"), 0);
 });
 
 test("normalizes grid size input for form-driven updates", () => {

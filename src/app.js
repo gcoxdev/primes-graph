@@ -175,6 +175,12 @@ export function getHoverSelection(row, column, size) {
   return { active: true, row, column };
 }
 
+export function getHoverDiagonalColumn(row, hoverRow, hoverColumn, direction) {
+  if (direction === "falling") return hoverColumn + row - hoverRow;
+  if (direction === "rising") return hoverColumn + hoverRow - row;
+  return 0;
+}
+
 export function shouldDrawRayRoot(row, model, primeRootsOnly) {
   if (!primeRootsOnly) return true;
   if (row === 1) return true;
@@ -230,6 +236,8 @@ function createState() {
     highlightPrimeColumns: false,
     primeRootsOnly: false,
     diagonalPrimeRays: false,
+    hoverFallingDiagonal: false,
+    hoverRisingDiagonal: false,
     model,
     primeCount: model.primeCount,
   };
@@ -344,6 +352,20 @@ function drawHoverGuides(ctx, state, bounds) {
     const bandBottom = Math.min(gridSize + headerSize, bounds.bottom);
     ctx.fillRect(x, bandTop, cellSize, bandBottom - bandTop);
   }
+
+  const drawDiagonalBand = (direction) => {
+    for (let row = bounds.firstRow; row <= bounds.lastRow; row += 1) {
+      const column = getHoverDiagonalColumn(row, state.hover.row, state.hover.column, direction);
+      if (column < bounds.firstColumn || column > bounds.lastColumn || column > size) continue;
+
+      const diagonalX = headerSize + (column - 1) * cellSize;
+      const diagonalY = headerSize + (row - 1) * cellSize;
+      ctx.fillRect(diagonalX, diagonalY, cellSize, cellSize);
+    }
+  };
+
+  if (state.hoverFallingDiagonal) drawDiagonalBand("falling");
+  if (state.hoverRisingDiagonal) drawDiagonalBand("rising");
 
   ctx.fillStyle = palette.hoverIntersection;
   if (x + cellSize >= bounds.left && x <= bounds.right && y + cellSize >= bounds.top && y <= bounds.bottom) {
@@ -558,6 +580,8 @@ function init() {
   const primeColumnInput = document.querySelector("#primeColumnInput");
   const primeRayInput = document.querySelector("#primeRayInput");
   const diagonalPrimeRayInput = document.querySelector("#diagonalPrimeRayInput");
+  const hoverFallingDiagonalInput = document.querySelector("#hoverFallingDiagonalInput");
+  const hoverRisingDiagonalInput = document.querySelector("#hoverRisingDiagonalInput");
   const zoomInput = document.querySelector("#zoomInput");
   const zoomOut = document.querySelector("#zoomOut");
   const zoomIn = document.querySelector("#zoomIn");
@@ -632,6 +656,16 @@ function init() {
 
   diagonalPrimeRayInput.addEventListener("change", () => {
     state.diagonalPrimeRays = diagonalPrimeRayInput.checked;
+    redraw();
+  });
+
+  hoverFallingDiagonalInput.addEventListener("change", () => {
+    state.hoverFallingDiagonal = hoverFallingDiagonalInput.checked;
+    redraw();
+  });
+
+  hoverRisingDiagonalInput.addEventListener("change", () => {
+    state.hoverRisingDiagonal = hoverRisingDiagonalInput.checked;
     redraw();
   });
 
