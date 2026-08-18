@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
-import {
+const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const moduleSource = html.match(/<script type="module">\n([\s\S]*)\n    <\/script>/)?.[1];
+assert.ok(moduleSource, "index.html should contain an inline module script");
+
+const {
   buildInterferenceModel,
   classifyCell,
   getCanvasLayout,
@@ -19,7 +24,7 @@ import {
   shouldDrawDiagonalRayRoot,
   shouldDrawHorizontalRayCell,
   shouldDrawRayRoot,
-} from "../src/app.js";
+} = await import(`data:text/javascript;base64,${Buffer.from(moduleSource).toString("base64")}`);
 
 test("marks frequency hits when the column is divisible by the row", () => {
   assert.equal(classifyCell(3, 9), "frequency");
