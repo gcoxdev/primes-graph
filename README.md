@@ -2,7 +2,7 @@
 
 An interactive visualization of divisibility and prime numbers, built with plain HTML, CSS, JavaScript, and Canvas.
 
-Each row represents a divisor and each column represents an integer. A cell lights up when its column is divisible by its row. Prime numbers have exactly two such hits—at row 1 and at their own row—and appear in green; other divisor hits appear in yellow.
+Each row represents a divisor and each column represents an integer. A cell lights up when its column is divisible by its row. Prime numbers have exactly two such hits—at row 1 and at their own row—and appear in mint green; other divisor hits appear in cyan.
 
 ![Prime Interference Field showing the default grid with N = 100, divisor hits, prime signals, and visualization controls](docs/screenshot.png)
 
